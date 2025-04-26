@@ -62,7 +62,9 @@ const shortcuts = [
   { key: "Alt + R", description: "Reset everything (layout + streams)" },
   { key: "A", description: "Add new cell (in edit mode)" },
   { key: "Arrow Keys", description: "Move focused cell (in edit mode)" },
-  { key: "Shift + Arrow keys", description: "Resize focused cell (in edit mode)" }
+  { key: "Shift + Arrow keys", description: "Resize focused cell (in edit mode)" },
+  { key: "Ctrl + V", description: "Paste URL in focused empty cell (in edit mode)" },
+  { key: "H", description: "Open keyboard shortcuts guide" },
 ];
 
 export default function GridPage() {
@@ -225,7 +227,7 @@ export default function GridPage() {
     });
   };
 
-  const handleIframeHover = (index: number) => {
+  const handleCellAudio = (index: number) => {
     Object.entries(playersRef.current).forEach(([playerIndex, player]) => {
       if (Number(playerIndex) === index) {
         player.unMute();
@@ -323,6 +325,12 @@ export default function GridPage() {
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isKeyboardGuideOpen]);
+
+  useEffect(() => {
+    if (focusedCell !== null) {
+      handleCellAudio(focusedCell);
+    }
+  }, [focusedCell]);
 
   const rowHeight = viewportSize.height / 6;
 
@@ -456,6 +464,28 @@ export default function GridPage() {
           addCell();
         }
         break;
+
+      case 'v':
+        // Handle Ctrl+V for pasting
+        if (e.ctrlKey && isEditMode && focusedCell !== null) {
+          // Check if the focused cell is empty
+          if (!parseYouTubeId(streams[focusedCell])) {
+            e.preventDefault(); // Prevent default paste behavior
+            // Get clipboard content
+            navigator.clipboard.readText().then(text => {
+              updateStream(focusedCell, text);
+            }).catch(err => {
+              console.error('Failed to read clipboard:', err);
+              notify('Failed to paste from clipboard');
+            });
+          }
+        }
+        break;
+
+      case 'h':
+        // H - Open keyboard shortcuts guide
+        setIsKeyboardGuideOpen(true);
+        break;
     }
 
     // Handle arrow keys in edit mode
@@ -513,7 +543,7 @@ export default function GridPage() {
         }
       }
     }
-  }, [focusedCell, isEditMode, streams.length, layout]);
+  }, [focusedCell, isEditMode, streams, layout]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyboardShortcuts);
@@ -714,7 +744,7 @@ export default function GridPage() {
               <div className={`iframe-wrapper iframe-${idx}`}>
                 {parsedId ? (
                   <div
-                    onMouseEnter={() => handleIframeHover(idx)}
+                    onMouseEnter={() => handleCellAudio(idx)}
                     className="iframe-container"
                   >
                     <div 
