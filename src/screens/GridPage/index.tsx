@@ -55,7 +55,7 @@ export default function GridPage() {
   const [profiles, setProfiles] = useState<string[]>([]);
 
   const [toolbarPos, setToolbarPos] = useState({ x: window.innerWidth / 2 - 100, y: 20 });
-  const [isDraggingToolbar, setIsDraggingToolbar] = useState(false);
+  const [, setIsDraggingToolbar] = useState(false);
   
   function handleToolbarDrag(e: React.MouseEvent<HTMLDivElement>) {
     const toolbar = e.currentTarget.parentElement as HTMLDivElement;
