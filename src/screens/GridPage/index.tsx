@@ -1,5 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import "./index.scss";
+
+declare global {
+  interface Window {
+    onYouTubeIframeAPIReady?: () => void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    YT: any;
+  }
+}
 
 import GridLayout from "react-grid-layout";
 import { Button, Transition } from "@headlessui/react";
@@ -20,6 +28,7 @@ import {
   Link,
   ClipboardPaste,
   ClipboardCopy,
+  HelpCircle,
 } from "lucide-react";
 
 const parseYouTubeId = (input: string): string => {
@@ -32,14 +41,19 @@ const parseYouTubeId = (input: string): string => {
       const parts = url.pathname.split("/");
       return parts[parts.length - 1];
     }
-  } catch {}
+  } catch {
+    // Ignore errors, will check regex below
+  }
   const cleaned = input.trim();
   if (/^[a-zA-Z0-9_-]{11}$/.test(cleaned)) return cleaned;
   return "";
 };
 
 export default function GridPage() {
+  const playersRef = useRef<{ [key: number]: YT.Player }>({});
+
   const [streams, setStreams] = useState<string[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [layout, setLayout] = useState<any[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [viewportSize, setViewportSize] = useState({
@@ -50,13 +64,18 @@ export default function GridPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [focusedCell, setFocusedCell] = useState<number | null>(null);
+  const [isKeyboardGuideOpen, setIsKeyboardGuideOpen] = useState(false);
 
   const [profileName, setProfileName] = useState("");
   const [profiles, setProfiles] = useState<string[]>([]);
 
-  const [toolbarPos, setToolbarPos] = useState({ x: window.innerWidth / 2 - 100, y: 20 });
+  const [toolbarPos, setToolbarPos] = useState({
+    x: window.innerWidth / 2 - 100,
+    y: 20,
+  });
   const [, setIsDraggingToolbar] = useState(false);
-  
+
   function handleToolbarDrag(e: React.MouseEvent<HTMLDivElement>) {
     const toolbar = e.currentTarget.parentElement as HTMLDivElement;
     const startX = e.clientX;
@@ -64,25 +83,24 @@ export default function GridPage() {
     const rect = toolbar.getBoundingClientRect();
     const offsetX = startX - rect.left;
     const offsetY = startY - rect.top;
-  
+
     function onMouseMove(moveEvent: MouseEvent) {
       moveEvent.preventDefault();
       const newX = moveEvent.clientX - offsetX;
       const newY = moveEvent.clientY - offsetY;
       setToolbarPos({ x: newX, y: newY });
     }
-  
+
     function onMouseUp() {
       setIsDraggingToolbar(false);
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
     }
-  
+
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
     setIsDraggingToolbar(true);
   }
-  
 
   const notify = (message: string) => {
     toast(message, {
@@ -132,11 +150,11 @@ export default function GridPage() {
     return Object.keys(profiles);
   };
 
-  const saveSettings = (streamsList = streams, layoutList = layout) => {
+  const saveSettings = useCallback((streamsList = streams, layoutList = layout) => {
     if (!hasLoaded) return;
     const settings = { streams: streamsList, layout: layoutList };
     window.location.hash = encodeURIComponent(JSON.stringify(settings));
-  };
+  }, [hasLoaded, layout, streams]);
 
   const addCell = () => {
     const newStreams = [...streams, ""];
@@ -173,6 +191,57 @@ export default function GridPage() {
     notify("Layout has been reset.");
   };
 
+  const initializePlayer = (videoId: string, index: number) => {
+    if (!videoId) return;
+
+    new YT.Player(`player-${index}`, {
+      videoId,
+      playerVars: {
+        autoplay: 1,
+        mute: 1,
+        controls: 1,
+      },
+      events: {
+        onReady: (event: YT.PlayerEvent) => {
+          playersRef.current[index] = event.target;
+        },
+      },
+    });
+  };
+
+  const handleIframeHover = (index: number) => {
+    Object.entries(playersRef.current).forEach(([playerIndex, player]) => {
+      if (Number(playerIndex) === index) {
+        player.unMute();
+      } else {
+        player.mute();
+      }
+    });
+  };
+
+  const handeWindowBlur = useCallback(() => {
+    Object.entries(playersRef.current).forEach(([, player]) => {
+      player.mute();
+    });
+  }, []);
+
+  const handeVisibilityChange = useCallback(() => {
+    if (document.hidden) {
+      Object.entries(playersRef.current).forEach(([, player]) => {
+        player.mute();
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("blur", handeWindowBlur);
+    document.addEventListener("visibilitychange", handeVisibilityChange);
+    return () => {
+      window.removeEventListener("blur", handeWindowBlur);
+      document.removeEventListener("visibilitychange", handeVisibilityChange);
+    };
+  }, [handeWindowBlur, handeVisibilityChange]);
+
   useEffect(() => {
     const handleResize = () => {
       setViewportSize({ width: window.innerWidth, height: window.innerHeight });
@@ -181,13 +250,13 @@ export default function GridPage() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const refreshProfiles = () => {
+  const refreshProfiles = useCallback(() => {
     setProfiles(listProfiles());
-  };
+  }, []);
 
   useEffect(() => {
     refreshProfiles();
-  }, []);
+  }, [refreshProfiles]);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -196,7 +265,9 @@ export default function GridPage() {
         const data = JSON.parse(decodeURIComponent(hash));
         if (Array.isArray(data.streams)) setStreams(data.streams);
         if (Array.isArray(data.layout)) setLayout(data.layout);
-      } catch {}
+      } catch {
+        console.error("Failed to parse settings from URL hash:", hash);
+      }
     }
     setHasLoaded(true);
   }, []);
@@ -204,7 +275,27 @@ export default function GridPage() {
   useEffect(() => {
     if (!hasLoaded) return;
     saveSettings(streams, layout);
-  }, [streams, layout, hasLoaded]);
+  }, [streams, layout, hasLoaded, saveSettings]);
+
+  useEffect(() => {
+    if (window.YT && window.YT.Player) {
+      streams.forEach((streamId, idx) => {
+        const parsedId = parseYouTubeId(streamId);
+        if (parsedId) {
+          initializePlayer(parsedId, idx);
+        }
+      });
+    } else {
+      window.onYouTubeIframeAPIReady = () => {
+        streams.forEach((streamId, idx) => {
+          const parsedId = parseYouTubeId(streamId);
+          if (parsedId) {
+            initializePlayer(parsedId, idx);
+          }
+        });
+      };
+    }
+  }, [streams]);
 
   const rowHeight = viewportSize.height / 6;
 
@@ -217,9 +308,24 @@ export default function GridPage() {
     });
   };
 
-  const clearStream = (index: number) => updateStream(index, "");
+  const clearStream = (index: number) => {
+    // First destroy the player instance if it exists
+    if (playersRef.current[index]) {
+      playersRef.current[index].destroy();
+      delete playersRef.current[index];
+    }
+    
+    // Then update the stream
+    updateStream(index, "");
+  };
 
   const deleteCell = (index: number) => {
+    // Clean up player first
+    if (playersRef.current[index]) {
+      playersRef.current[index].destroy();
+      delete playersRef.current[index];
+    }
+
     const newStreams = [...streams];
     const newLayout = [...layout];
     newStreams.splice(index, 1);
@@ -232,6 +338,230 @@ export default function GridPage() {
     setLayout(cleanedLayout);
     saveSettings(newStreams, cleanedLayout);
   };
+
+  const handleKeyboardShortcuts = useCallback((e: KeyboardEvent) => {
+    // Ignore if typing in input
+    if (e.target instanceof HTMLInputElement) return;
+
+    switch (e.key.toLowerCase()) {
+      case 'm':
+        // Toggle mute all
+        Object.values(playersRef.current).forEach(player => {
+          if (player.isMuted()) {
+            player.unMute();
+          } else {
+            player.mute();
+          }
+        });
+        break;
+
+      case ' ':
+        // Space - Play/Pause all
+        e.preventDefault();
+        Object.values(playersRef.current).forEach(player => {
+          const state = player.getPlayerState();
+          if (state === YT.PlayerState.PLAYING) {
+            player.pauseVideo();
+          } else {
+            player.playVideo();
+          }
+        });
+        break;
+
+      case 'tab':
+        // Tab navigation
+        e.preventDefault();
+        if (streams.length === 0) return;
+        
+        if (e.shiftKey) {
+          setFocusedCell(prev => 
+            prev === null || prev === 0 ? streams.length - 1 : prev - 1
+          );
+        } else {
+          setFocusedCell(prev => 
+            prev === null || prev === streams.length - 1 ? 0 : prev + 1
+          );
+        }
+        break;
+
+      case 'backspace':
+        // Clear focused cell
+        if (focusedCell !== null) {
+          clearStream(focusedCell);
+        }
+        break;
+
+      case 'delete':
+        // Delete focused cell
+        if (focusedCell !== null) {
+          deleteCell(focusedCell);
+          setFocusedCell(null);
+        }
+        break;
+
+      case 'e':
+        if (e.shiftKey) {
+          // Shift + E - Exit edit mode
+          setIsEditMode(false);
+        } else {
+          // E - Enter edit mode
+          setIsEditMode(true);
+        }
+        break;
+
+      case 'r':
+        if (e.altKey) {
+          // Alt + R - Reset everything
+          if (window.confirm('Are you sure you want to reset everything?')) {
+            resetAll();
+          }
+        } else if (e.shiftKey) {
+          // Shift + R - Reset layout
+          if (window.confirm('Are you sure you want to reset the layout?')) {
+            resetLayoutOnly();
+          }
+        }
+        break;
+
+      case 'a':
+        // A - Add new cell in edit mode
+        if (isEditMode) {
+          addCell();
+        }
+        break;
+    }
+
+    // Handle arrow keys in edit mode
+    if (isEditMode && focusedCell !== null) {
+      const currentLayout = layout[focusedCell];
+      if (!currentLayout) return;
+
+      if (e.shiftKey) {
+        // Resize with Shift + Arrow keys
+        switch (e.key) {
+          case 'ArrowRight':
+            setLayout(prev => prev.map((item, idx) => 
+              idx === focusedCell ? { ...item, w: Math.min(item.w + 1, 6) } : item
+            ));
+            break;
+          case 'ArrowLeft':
+            setLayout(prev => prev.map((item, idx) => 
+              idx === focusedCell ? { ...item, w: Math.max(item.w - 1, 1) } : item
+            ));
+            break;
+          case 'ArrowDown':
+            setLayout(prev => prev.map((item, idx) => 
+              idx === focusedCell ? { ...item, h: item.h + 1 } : item
+            ));
+            break;
+          case 'ArrowUp':
+            setLayout(prev => prev.map((item, idx) => 
+              idx === focusedCell ? { ...item, h: Math.max(item.h - 1, 1) } : item
+            ));
+            break;
+        }
+      } else {
+        // Move with Arrow keys
+        switch (e.key) {
+          case 'ArrowRight':
+            setLayout(prev => prev.map((item, idx) => 
+              idx === focusedCell ? { ...item, x: Math.min(item.x + 1, 5) } : item
+            ));
+            break;
+          case 'ArrowLeft':
+            setLayout(prev => prev.map((item, idx) => 
+              idx === focusedCell ? { ...item, x: Math.max(item.x - 1, 0) } : item
+            ));
+            break;
+          case 'ArrowDown':
+            setLayout(prev => prev.map((item, idx) => 
+              idx === focusedCell ? { ...item, y: item.y + 1 } : item
+            ));
+            break;
+          case 'ArrowUp':
+            setLayout(prev => prev.map((item, idx) => 
+              idx === focusedCell ? { ...item, y: Math.max(item.y - 1, 0) } : item
+            ));
+            break;
+        }
+      }
+    }
+  }, [focusedCell, isEditMode, streams.length, layout]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+    return () => {
+      window.removeEventListener('keydown', handleKeyboardShortcuts);
+    };
+  }, [handleKeyboardShortcuts]);
+
+  const KeyboardGuide = () => (
+    <Transition
+      show={isKeyboardGuideOpen}
+      enter="transition transform duration-300"
+      enterFrom="opacity-0"
+      enterTo="opacity-100"
+      leave="transition transform duration-200"
+      leaveFrom="opacity-100"
+      leaveTo="opacity-0"
+    >
+      <div className="modal-overlay" onClick={() => setIsKeyboardGuideOpen(false)}>
+        <div className="keyboard-guide" onClick={e => e.stopPropagation()}>
+          <h2>Keyboard Shortcuts</h2>
+          <div className="shortcuts-list">
+            <div className="shortcut">
+              <kbd>M</kbd>
+              <span>Toggle mute for all streams</span>
+            </div>
+            <div className="shortcut">
+              <kbd>Space</kbd>
+              <span>Play/pause all streams</span>
+            </div>
+            <div className="shortcut">
+              <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd>
+              <span>Navigate between cells</span>
+            </div>
+            <div className="shortcut">
+              <kbd>Backspace</kbd>
+              <span>Clear focused cell</span>
+            </div>
+            <div className="shortcut">
+              <kbd>Delete</kbd>
+              <span>Remove focused cell</span>
+            </div>
+            <div className="shortcut">
+              <kbd>E</kbd>
+              <span>Enter edit mode</span>
+            </div>
+            <div className="shortcut">
+              <kbd>Shift</kbd>+<kbd>E</kbd>
+              <span>Exit edit mode</span>
+            </div>
+            <div className="shortcut">
+              <kbd>Shift</kbd>+<kbd>R</kbd>
+              <span>Reset layout</span>
+            </div>
+            <div className="shortcut">
+              <kbd>Alt</kbd>+<kbd>R</kbd>
+              <span>Reset everything</span>
+            </div>
+            <div className="shortcut">
+              <kbd>A</kbd>
+              <span>Add new cell (in edit mode)</span>
+            </div>
+            <div className="shortcut">
+              <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>
+              <span>Move focused cell (in edit mode)</span>
+            </div>
+            <div className="shortcut">
+              <kbd>Shift</kbd>+<kbd>Arrow keys</kbd>
+              <span>Resize focused cell (in edit mode)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  );
 
   return (
     <div className={`grid-page ${isInteracting ? "interacting" : ""}`}>
@@ -261,38 +591,35 @@ export default function GridPage() {
           },
         }}
       />
-{isEditMode && (
-  <div
-    className="edit-toolbar"
-    style={{
-      position: "absolute",
-      left: `${toolbarPos.x}px`,
-      top: `${toolbarPos.y}px`
-    }}
-  >
-    <div className="toolbar-drag-handle" onMouseDown={handleToolbarDrag}>
-      <GripVertical size={18} />
-    </div>
-    <Button
-      className="stop-edit-button"
-      onClick={() => setIsEditMode(false)}
-    >
-      <Check size={18} /> Done
-    </Button>
-    <Button
-      className="add-stream-button"
-      onClick={addCell}
-    >
-      <Plus size={18} /> Add Stream
-    </Button>
-    <Button
-      className="add-stream-button"
-      onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-    >
-      <SettingsIcon size={18} />
-    </Button>
-  </div>
-)}
+      {isEditMode && (
+        <div
+          className="edit-toolbar"
+          style={{
+            position: "absolute",
+            left: `${toolbarPos.x}px`,
+            top: `${toolbarPos.y}px`,
+          }}
+        >
+          <div className="toolbar-drag-handle" onMouseDown={handleToolbarDrag}>
+            <GripVertical size={18} />
+          </div>
+          <Button
+            className="stop-edit-button"
+            onClick={() => setIsEditMode(false)}
+          >
+            <Check size={18} /> Done
+          </Button>
+          <Button className="add-stream-button" onClick={addCell}>
+            <Plus size={18} /> Add Stream
+          </Button>
+          <Button
+            className="add-stream-button"
+            onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+          >
+            <SettingsIcon size={18} />
+          </Button>
+        </div>
+      )}
       <div className="controls">
         <Button
           className="settings-button"
@@ -312,6 +639,12 @@ export default function GridPage() {
           }}
         >
           {isEditMode ? <Check size={18} /> : <Pencil size={18} />}
+        </Button>
+        <Button
+          className="settings-button"
+          onClick={() => setIsKeyboardGuideOpen(true)}
+        >
+          <HelpCircle size={18} />
         </Button>
       </div>
 
@@ -337,7 +670,10 @@ export default function GridPage() {
         {streams.map((streamId, idx) => {
           const parsedId = parseYouTubeId(streamId);
           return (
-            <div key={idx} className="grid-item">
+            <div 
+              key={idx} 
+              className={`grid-item ${focusedCell === idx ? 'focused' : ''}`}
+            >
               {isEditMode && (
                 <>
                   <div className="drag-handle">
@@ -351,19 +687,20 @@ export default function GridPage() {
                   </button>
                 </>
               )}
-              <div className="iframe-wrapper">
+              <div className={`iframe-wrapper iframe-${idx}`}>
                 {parsedId ? (
-                  <iframe
+                  <div
+                    onMouseEnter={() => handleIframeHover(idx)}
+                    className="iframe-container"
+                  >
+                    <div 
+                    id={`player-${idx}`}
                     className={`stream-iframe ${
                       isInteracting ? "disabled" : ""
-                    }`}
-                    src={`https://www.youtube.com/embed/${parsedId}`}
-                    title={`Stream ${idx}`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
+                    }`} />
+                  </div>
                 ) : (
-                  <div className="placeholder with-input">
+                  <div className="placeholder with-input" >
                     <input
                       type="text"
                       placeholder="YouTube ID or URL"
@@ -665,6 +1002,15 @@ export default function GridPage() {
           </div>
         </div>
       </Transition>
+
+      <button 
+        className="help-button"
+        onClick={() => setIsKeyboardGuideOpen(true)}
+      >
+        <HelpCircle size={24} />
+      </button>
+
+      <KeyboardGuide />
     </div>
   );
 }
