@@ -1,54 +1,56 @@
-# React + TypeScript + Vite
+# Multiwatch
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Multiwatch** is a simple, elegant web app that lets you organize, resize, and share multiple YouTube streams on a customizable grid layout.
 
-Currently, two official plugins are available:
+- 🖥 Flexible drag-and-drop stream arrangement
+- 🔗 Instant URL sharing with your layout
+- 🧩 Save and load profiles
+- ✨ Fully responsive, PWA-ready
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## 🚀 Features
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Add YouTube links by URL or ID
+- Drag, resize, and arrange streams freely
+- Share full layouts via a simple link
+- Save multiple profiles for easy switching
+- Progressive Web App (PWA) support
+- Beautiful UI with subtle animations
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+---
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🛠 Technologies
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- React + TypeScript
+- React Grid Layout
+- Headless UI
+- Lucide Icons
+- Sass (SCSS)
+- React Hot Toast
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+---
+
+## 🤖 Disclaimer
+
+This project was **heavily assisted by AI coding agents**, blended with human supervision and creative design thinking.  
+Some sections were automatically generated and improved iteratively through interactive AI coding sessions.
+
+Use at your own discretion.  
+**No guarantee of production-readiness or commercial use licensing is provided.**
+
+---
+
+## 📢 Contributing
+
+At this stage, the project is primarily for personal experimentation and learning.  
+Feel free to fork, modify, and expand — just keep the attribution where appropriate.
+
+---
+
+## 📄 License
+
+Released under the **MIT License**.  
+Feel free to use, modify, and share freely, but **NO WARRANTY** is provided.
+
+---

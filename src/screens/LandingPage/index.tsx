@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ClipboardPaste, LayoutGrid, Rocket, Share2 } from "lucide-react";
+import { ClipboardPaste, Github, LayoutGrid, Rocket, Share2 } from "lucide-react";
 import "./index.scss";
 
 export default function LandingPage() {
@@ -80,7 +80,12 @@ export default function LandingPage() {
       </div>
 
       <footer className="footer">
-        <p>© {new Date().getFullYear()} Multiwatch. Built with 💻 and ☕</p>
+        <p>
+          © {new Date().getFullYear()} Multiwatch. Built with 💻 and ☕
+          <a href="https://github.com/akinozgen/react-multiwatch" target="_blank" rel="noopener noreferrer">
+            GitHub
+            </a>
+        </p>
       </footer>
     </div>
   );
