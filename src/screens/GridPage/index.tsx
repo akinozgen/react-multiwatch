@@ -49,6 +49,22 @@ const parseYouTubeId = (input: string): string => {
   return "";
 };
 
+const shortcuts = [
+  { key: "M", description: "Toggle mute for all streams" },
+  { key: "Space", description: "Play/pause all streams" },
+  { key: "Tab", description: "Navigate between cells" },
+  { key: "Shift + Tab", description: "Navigate backward between cells" },
+  { key: "Backspace", description: "Clear focused cell" },
+  { key: "Delete", description: "Remove focused cell" },
+  { key: "E", description: "Enter edit mode" },
+  { key: "Shift + E", description: "Exit edit mode" },
+  { key: "Shift + R", description: "Reset layout" },
+  { key: "Alt + R", description: "Reset everything (layout + streams)" },
+  { key: "A", description: "Add new cell (in edit mode)" },
+  { key: "Arrow Keys", description: "Move focused cell (in edit mode)" },
+  { key: "Shift + Arrow keys", description: "Resize focused cell (in edit mode)" }
+];
+
 export default function GridPage() {
   const playersRef = useRef<{ [key: number]: YT.Player }>({});
 
@@ -297,6 +313,17 @@ export default function GridPage() {
     }
   }, [streams]);
 
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isKeyboardGuideOpen) {
+        setIsKeyboardGuideOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isKeyboardGuideOpen]);
+
   const rowHeight = viewportSize.height / 6;
 
   const updateStream = (index: number, rawInput: string) => {
@@ -495,6 +522,26 @@ export default function GridPage() {
     };
   }, [handleKeyboardShortcuts]);
 
+  const KeyboardShortcut = ({ shortcut: { key, description } }: { shortcut: { key: string, description: string } }) => {
+    const keys = key.split('+').map(k => k.trim());
+    
+    return (
+      <div className="keybinding-card" role="listitem">
+        <div className="keys">
+          {keys.map((k, i) => (
+            <>
+              {i > 0 && <span className="plus">+</span>}
+              <kbd>{k}</kbd>
+            </>
+          ))}
+        </div>
+        <div className="description">
+          {description}
+        </div>
+      </div>
+    );
+  };
+
   const KeyboardGuide = () => (
     <Transition
       show={isKeyboardGuideOpen}
@@ -505,64 +552,38 @@ export default function GridPage() {
       leaveFrom="opacity-100"
       leaveTo="opacity-0"
     >
-      <div className="modal-overlay" onClick={() => setIsKeyboardGuideOpen(false)}>
-        <div className="keyboard-guide" onClick={e => e.stopPropagation()}>
-          <h2>Keyboard Shortcuts</h2>
-          <div className="shortcuts-list">
-            <div className="shortcut">
-              <kbd>M</kbd>
-              <span>Toggle mute for all streams</span>
-            </div>
-            <div className="shortcut">
-              <kbd>Space</kbd>
-              <span>Play/pause all streams</span>
-            </div>
-            <div className="shortcut">
-              <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd>
-              <span>Navigate between cells</span>
-            </div>
-            <div className="shortcut">
-              <kbd>Backspace</kbd>
-              <span>Clear focused cell</span>
-            </div>
-            <div className="shortcut">
-              <kbd>Delete</kbd>
-              <span>Remove focused cell</span>
-            </div>
-            <div className="shortcut">
-              <kbd>E</kbd>
-              <span>Enter edit mode</span>
-            </div>
-            <div className="shortcut">
-              <kbd>Shift</kbd>+<kbd>E</kbd>
-              <span>Exit edit mode</span>
-            </div>
-            <div className="shortcut">
-              <kbd>Shift</kbd>+<kbd>R</kbd>
-              <span>Reset layout</span>
-            </div>
-            <div className="shortcut">
-              <kbd>Alt</kbd>+<kbd>R</kbd>
-              <span>Reset everything</span>
-            </div>
-            <div className="shortcut">
-              <kbd>A</kbd>
-              <span>Add new cell (in edit mode)</span>
-            </div>
-            <div className="shortcut">
-              <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>
-              <span>Move focused cell (in edit mode)</span>
-            </div>
-            <div className="shortcut">
-              <kbd>Shift</kbd>+<kbd>Arrow keys</kbd>
-              <span>Resize focused cell (in edit mode)</span>
-            </div>
+      <div 
+        className="modal-overlay" 
+        onClick={() => setIsKeyboardGuideOpen(false)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="keyboard-guide-title"
+      >
+        <div 
+          className="keyboard-guide" 
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button 
+            className="close-btn" 
+            onClick={() => setIsKeyboardGuideOpen(false)}
+            aria-label="Close keyboard shortcuts guide"
+          >
+            <X size={24} />
+          </button>
+          <h2 id="keyboard-guide-title">Keyboard Shortcuts</h2>
+          <div 
+            className="keybindings-grid"
+            role="list"
+          >
+            {shortcuts.map((shortcut) => (
+              <KeyboardShortcut key={shortcut.key} shortcut={shortcut} />
+            ))}
           </div>
         </div>
       </div>
     </Transition>
   );
-
+  
   return (
     <div className={`grid-page ${isInteracting ? "interacting" : ""}`}>
       <Toaster
@@ -673,6 +694,9 @@ export default function GridPage() {
             <div 
               key={idx} 
               className={`grid-item ${focusedCell === idx ? 'focused' : ''}`}
+              role="region"
+              aria-label={`Stream ${idx + 1}`}
+              tabIndex={focusedCell === idx ? 0 : -1}
             >
               {isEditMode && (
                 <>
@@ -1006,6 +1030,9 @@ export default function GridPage() {
       <button 
         className="help-button"
         onClick={() => setIsKeyboardGuideOpen(true)}
+        aria-label="Open keyboard shortcuts guide"
+        aria-expanded={isKeyboardGuideOpen}
+        title="View keyboard shortcuts"
       >
         <HelpCircle size={24} />
       </button>
